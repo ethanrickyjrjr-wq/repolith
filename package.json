@@ -1,0 +1,47 @@
+{
+  "name": "repolith",
+  "version": "0.0.1",
+  "description": "Make a set of independent git repos feel like one monorepo — TOML manifest, atomic lockfile hash, parallel git dispatch, a VS Code extension, and an MCP server for AI agents.",
+  "keywords": [
+    "git",
+    "monorepo",
+    "multi-repo",
+    "polyrepo",
+    "workspace",
+    "lockfile",
+    "cli",
+    "mcp",
+    "vscode",
+    "agents"
+  ],
+  "license": "MIT",
+  "author": "Ricky Cooper",
+  "type": "module",
+  "bin": {
+    "repolith": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "bun build src/cli.ts --outfile dist/cli.js --target node",
+    "test": "bun test",
+    "dev": "bun run src/cli.ts",
+    "prepublishOnly": "bun run build"
+  },
+  "dependencies": {
+    "commander": "^15.0.0",
+    "execa": "9.6.1",
+    "p-limit": "7.3.0",
+    "smol-toml": "1.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.1",
+    "typescript": "^6.0.3"
+  }
+}
