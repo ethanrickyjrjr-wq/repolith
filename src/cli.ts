@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
 import { syncCommand } from './commands/sync.js';
+import { checkoutCommand } from './commands/checkout.js';
 import { statusCommand } from './commands/status.js';
 import { execCommand } from './commands/exec.js';
 import { grepCommand } from './commands/grep.js';
@@ -25,6 +26,14 @@ program
   .argument('[manifest]', 'Path to repolith.toml', 'repolith.toml')
   .action(async (manifest: string) => {
     await syncCommand(manifest).catch(fail);
+  });
+
+program
+  .command('checkout')
+  .description('Restore every repo to the commit pinned in repolith.lock.json (deterministic system restore)')
+  .option('--manifest <path>', 'Path to repolith.toml', 'repolith.toml')
+  .action(async (opts: { manifest: string }) => {
+    await checkoutCommand(opts.manifest).catch(fail);
   });
 
 program

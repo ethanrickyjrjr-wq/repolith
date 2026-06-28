@@ -22,6 +22,16 @@ export async function gitCheckout(repoDir: string, ref: string): Promise<void> {
   await git(repoDir, ['pull', '--ff-only']);
 }
 
+// Detached checkout of an exact commit (for restore-from-lockfile). Never pulls —
+// the SHA is authoritative. Fetches the object first if a single-branch clone lacks it.
+export async function gitCheckoutCommit(repoDir: string, sha: string): Promise<void> {
+  const present = await execa('git', ['cat-file', '-e', `${sha}^{commit}`], { cwd: repoDir, reject: false });
+  if (present.exitCode !== 0) {
+    await execa('git', ['fetch', 'origin', sha], { cwd: repoDir, reject: false });
+  }
+  await git(repoDir, ['checkout', '--detach', sha]);
+}
+
 export async function gitCurrentCommit(repoDir: string): Promise<string> {
   const { stdout } = await git(repoDir, ['rev-parse', 'HEAD']);
   return stdout.trim();
