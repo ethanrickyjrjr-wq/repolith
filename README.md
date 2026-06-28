@@ -2,7 +2,7 @@
 
 > Make a set of independent git repos feel like one monorepo — without touching git internals, GitHub, or CI.
 
-**Status: v0.2 — CLI + MCP server.** All CLI commands (`sync`, `checkout`, `status`, `grep`, `log`, `diff`, `exec`, `init`, `bisect`) are implemented and tested, plus an **MCP server** (`repolith mcp`) so AI agents can query and restore workspace state, and a VS Code extension. APIs may still change pre-1.0.
+**Status: v0.3 — CLI + MCP server.** All CLI commands (`sync`, `checkout`, `status`, `grep`, `log`, `diff`, `exec`, `init`, `bisect`, `state`, `freeze`, `open`) are implemented and tested — with `--json` on the read commands — plus an **MCP server** (`repolith mcp`) so AI agents can query and restore workspace state, and a VS Code extension. APIs may still change pre-1.0.
 
 ## What it is
 
@@ -34,7 +34,12 @@ repolith grep "TODO"         # search across all repos at once
 repolith exec "npm test"     # run a command in every repo
 repolith checkout            # restore every repo to the locked commit (deterministic)
 repolith bisect --good good.lock.json --test "npm test"  # find the repo+commit that broke the system
+repolith state --json        # print the atomic hash + per-repo commits (scriptable)
+repolith freeze snap.json    # write a shareable snapshot of the current state
+repolith open snap.json      # reconstruct the exact system from a shared snapshot
 ```
+
+`status`, `grep`, `log`, `diff`, and `state` all accept `--json` for scripting and agent/CI use.
 
 ## For AI agents (MCP)
 

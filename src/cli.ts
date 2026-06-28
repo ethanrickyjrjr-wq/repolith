@@ -10,6 +10,8 @@ import { diffCommand } from './commands/diff.js';
 import { initCommand } from './commands/init.js';
 import { startMcpServer } from './mcp.js';
 import { bisect } from './commands/bisect.js';
+import { freezeCommand, stateCommand } from './commands/freeze.js';
+import { openCommand } from './commands/open.js';
 
 function fail(e: Error): never {
   console.error(e.message);
@@ -20,7 +22,7 @@ const program = new Command();
 program
   .name('repolith')
   .description('Make a set of independent git repos feel like one monorepo')
-  .version('0.2.0');
+  .version('0.3.0');
 
 program
   .command('sync')
@@ -39,11 +41,39 @@ program
   });
 
 program
+  .command('state')
+  .description('Print the atomic workspace hash + each repo\'s current commit')
+  .option('--manifest <path>', 'Path to repolith.toml', 'repolith.toml')
+  .option('--json', 'Output structured JSON', false)
+  .action(async (opts: { manifest: string; json?: boolean }) => {
+    await stateCommand(opts.manifest, opts.json ?? false).catch(fail);
+  });
+
+program
+  .command('freeze')
+  .description('Write a shareable snapshot of the current state to a file')
+  .argument('[outfile]', 'Output path', 'repolith.state.json')
+  .option('--manifest <path>', 'Path to repolith.toml', 'repolith.toml')
+  .action(async (outfile: string, opts: { manifest: string }) => {
+    await freezeCommand(opts.manifest, outfile).catch(fail);
+  });
+
+program
+  .command('open')
+  .description('Reconstruct the workspace from a shared state file (from `repolith freeze`)')
+  .argument('<statefile>', 'Path to a repolith.state.json')
+  .option('--manifest <path>', 'Path to repolith.toml', 'repolith.toml')
+  .action(async (statefile: string, opts: { manifest: string }) => {
+    await openCommand(opts.manifest, statefile).catch(fail);
+  });
+
+program
   .command('status')
   .description('Show branch + dirty/clean + ahead/behind for every repo')
   .option('--manifest <path>', 'Path to repolith.toml', 'repolith.toml')
-  .action(async (opts: { manifest: string }) => {
-    await statusCommand(opts.manifest).catch(fail);
+  .option('--json', 'Output structured JSON', false)
+  .action(async (opts: { manifest: string; json?: boolean }) => {
+    await statusCommand(opts.manifest, opts.json ?? false).catch(fail);
   });
 
 program
@@ -63,16 +93,17 @@ program
   .option('-l, --files-with-matches', 'Print only filenames')
   .option('-w, --word-regexp', 'Match whole words only')
   .option('--manifest <path>', 'Path to repolith.toml', 'repolith.toml')
+  .option('--json', 'Output structured JSON', false)
   .allowUnknownOption()
   .action(async (
     pattern: string,
-    opts: { ignoreCase?: boolean; filesWithMatches?: boolean; wordRegexp?: boolean; manifest: string },
+    opts: { ignoreCase?: boolean; filesWithMatches?: boolean; wordRegexp?: boolean; manifest: string; json?: boolean },
   ) => {
     const extra: string[] = [];
     if (opts.ignoreCase) extra.push('-i');
     if (opts.filesWithMatches) extra.push('-l');
     if (opts.wordRegexp) extra.push('-w');
-    await grepCommand(pattern, extra, opts.manifest).catch(fail);
+    await grepCommand(pattern, extra, opts.manifest, opts.json ?? false).catch(fail);
   });
 
 program
@@ -81,10 +112,11 @@ program
   .option('-n, --max-count <n>', 'Limit number of commits', '10')
   .option('--since <date>', 'Show commits more recent than date')
   .option('--manifest <path>', 'Path to repolith.toml', 'repolith.toml')
-  .action(async (opts: { maxCount: string; since?: string; manifest: string }) => {
+  .option('--json', 'Output structured JSON', false)
+  .action(async (opts: { maxCount: string; since?: string; manifest: string; json?: boolean }) => {
     const extra = ['-n', opts.maxCount];
     if (opts.since) extra.push(`--since=${opts.since}`);
-    await logCommand(extra, opts.manifest).catch(fail);
+    await logCommand(extra, opts.manifest, opts.json ?? false).catch(fail);
   });
 
 program
@@ -92,11 +124,12 @@ program
   .description('Show git diff across all repos')
   .option('--staged', 'Show staged changes')
   .option('--manifest <path>', 'Path to repolith.toml', 'repolith.toml')
+  .option('--json', 'Output structured JSON', false)
   .allowUnknownOption()
-  .action(async (opts: { staged?: boolean; manifest: string }) => {
+  .action(async (opts: { staged?: boolean; manifest: string; json?: boolean }) => {
     const extra: string[] = [];
     if (opts.staged) extra.push('--staged');
-    await diffCommand(extra, opts.manifest).catch(fail);
+    await diffCommand(extra, opts.manifest, opts.json ?? false).catch(fail);
   });
 
 program

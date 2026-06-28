@@ -27,7 +27,7 @@ async function repoStatus(dest: string): Promise<RepoStatus> {
   return { branch: branch.trim(), dirty: porcelain.trim().length > 0, ahead, behind };
 }
 
-export async function statusCommand(manifestPath: string): Promise<void> {
+export async function statusCommand(manifestPath: string, json = false): Promise<void> {
   const manifestDir = resolve(manifestPath, '..');
   const toml = await readFile(manifestPath, 'utf8');
   const manifest = parseManifest(toml);
@@ -35,6 +35,14 @@ export async function statusCommand(manifestPath: string): Promise<void> {
   const results = await runAll(manifest.repos, (repo) =>
     repoStatus(join(manifestDir, repo.path)),
   );
+
+  if (json) {
+    const data = results.map((r) =>
+      r.ok ? { repo: r.repo.name, ...r.value } : { repo: r.repo.name, error: r.error.message },
+    );
+    console.log(JSON.stringify(data, null, 2));
+    return;
+  }
 
   const nameWidth = Math.max(4, ...manifest.repos.map((r) => r.name.length));
   for (const r of results) {

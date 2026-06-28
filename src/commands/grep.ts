@@ -4,7 +4,12 @@ import { parseManifest } from '../manifest.js';
 import { gitRun } from '../git.js';
 import { runAll } from '../runner.js';
 
-export async function grepCommand(pattern: string, extraArgs: string[], manifestPath: string): Promise<void> {
+export async function grepCommand(
+  pattern: string,
+  extraArgs: string[],
+  manifestPath: string,
+  json = false,
+): Promise<void> {
   const manifestDir = resolve(manifestPath, '..');
   const toml = await readFile(manifestPath, 'utf8');
   const manifest = parseManifest(toml);
@@ -17,15 +22,18 @@ export async function grepCommand(pattern: string, extraArgs: string[], manifest
     return stdout;
   });
 
-  let anyMatch = false;
+  const matches: { repo: string; hits: string[] }[] = [];
   for (const r of results) {
-    if (!r.ok || !r.value.trim()) continue;
-    const lines = r.value.trim().split('\n');
-    for (const line of lines) {
-      console.log(`[${r.repo.name}] ${line}`);
-      anyMatch = true;
+    if (r.ok && r.value.trim()) matches.push({ repo: r.repo.name, hits: r.value.trim().split('\n') });
+  }
+
+  if (json) {
+    console.log(JSON.stringify(matches, null, 2));
+  } else {
+    for (const m of matches) {
+      for (const line of m.hits) console.log(`[${m.repo}] ${line}`);
     }
   }
 
-  if (!anyMatch) process.exit(1);
+  if (matches.length === 0) process.exit(1);
 }

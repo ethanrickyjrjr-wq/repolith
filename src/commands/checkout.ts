@@ -5,7 +5,7 @@ import { parseManifest } from '../manifest.js';
 import { readLockfile, computeHash } from '../lockfile.js';
 import { gitClone, gitFetch, gitCheckoutCommit, gitRun } from '../git.js';
 import { runAll } from '../runner.js';
-import type { LockRepo } from '../types.js';
+import type { Lockfile, LockRepo } from '../types.js';
 
 export interface RestoreResult {
   workspace: string;
@@ -14,25 +14,24 @@ export interface RestoreResult {
   errors: { repo: string; message: string }[];
 }
 
-// Pure restore: clone-if-missing, fetch, detach each repo to its locked commit,
-// then verify the recomputed atomic hash. Returns structured data — never prints
-// or exits, so it is safe to call from the CLI *and* from the (stdio) MCP server.
-export async function restoreToLock(manifestPath: string): Promise<RestoreResult> {
+// Pure restore to an arbitrary pinned state: clone-if-missing, fetch, detach each
+// repo to its commit, then verify the recomputed atomic hash matches the state's.
+// Returns structured data — never prints or exits, so it is safe to call from the
+// CLI *and* from the (stdio) MCP server. Shared by `checkout` and `open`.
+export async function restoreState(manifestPath: string, state: Lockfile): Promise<RestoreResult> {
   const manifestDir = resolve(manifestPath, '..');
   const manifest = parseManifest(await readFile(manifestPath, 'utf8'));
-  const lock = await readLockfile(manifestDir);
-  if (!lock) throw new Error('no repolith.lock.json — run `repolith sync` first');
 
   const results = await runAll(manifest.repos, async (repo) => {
-    const locked = lock.repos[repo.name];
-    if (!locked) throw new Error(`repo "${repo.name}" is not in the lockfile`);
+    const pinned = state.repos[repo.name];
+    if (!pinned) throw new Error(`state has no commit for "${repo.name}"`);
     const dest = join(manifestDir, repo.path);
     if (!existsSync(dest)) await gitClone(repo.url, dest, repo.ref);
     await gitFetch(dest);
-    await gitCheckoutCommit(dest, locked.commit);
+    await gitCheckoutCommit(dest, pinned.commit);
     const head = (await gitRun(dest, ['rev-parse', 'HEAD'])).stdout.trim();
-    if (head !== locked.commit) {
-      throw new Error(`HEAD ${head.slice(0, 8)} != locked ${locked.commit.slice(0, 8)}`);
+    if (head !== pinned.commit) {
+      throw new Error(`HEAD ${head.slice(0, 8)} != pinned ${pinned.commit.slice(0, 8)}`);
     }
     return head;
   });
@@ -45,12 +44,19 @@ export async function restoreToLock(manifestPath: string): Promise<RestoreResult
   }
 
   const hash = computeHash(repos);
-  if (errors.length === 0 && hash !== lock.hash) {
+  if (errors.length === 0 && hash !== state.hash) {
     throw new Error(
-      `restored hash ${hash.slice(0, 12)} != lockfile hash ${lock.hash.slice(0, 12)} — refusing to claim reproducibility`,
+      `restored hash ${hash.slice(0, 12)} != expected ${state.hash.slice(0, 12)} — refusing to claim reproducibility`,
     );
   }
   return { workspace: manifest.name, hash, repos, errors };
+}
+
+// Restore to the repo's own repolith.lock.json.
+export async function restoreToLock(manifestPath: string): Promise<RestoreResult> {
+  const lock = await readLockfile(resolve(manifestPath, '..'));
+  if (!lock) throw new Error('no repolith.lock.json — run `repolith sync` first');
+  return restoreState(manifestPath, lock);
 }
 
 export async function checkoutCommand(manifestPath: string): Promise<void> {
