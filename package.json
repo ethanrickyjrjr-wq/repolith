@@ -43,10 +43,12 @@
     "prepublishOnly": "bun run build"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "commander": "^15.0.0",
     "execa": "9.6.1",
     "p-limit": "7.3.0",
-    "smol-toml": "1.7.0"
+    "smol-toml": "1.7.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^26.0.1",

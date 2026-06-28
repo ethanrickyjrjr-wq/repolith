@@ -8,6 +8,7 @@ import { grepCommand } from './commands/grep.js';
 import { logCommand } from './commands/log.js';
 import { diffCommand } from './commands/diff.js';
 import { initCommand } from './commands/init.js';
+import { startMcpServer } from './mcp.js';
 
 function fail(e: Error): never {
   console.error(e.message);
@@ -104,6 +105,15 @@ program
   .option('-f, --force', 'Overwrite an existing repolith.toml')
   .action(async (opts: { dir: string; force?: boolean }) => {
     await initCommand(opts.dir, opts.force ?? false).catch(fail);
+  });
+
+program
+  .command('mcp')
+  .description('Run repolith as an MCP server (stdio) so AI agents can query and restore workspace state')
+  .option('--manifest <path>', 'Path to repolith.toml', 'repolith.toml')
+  .option('--allow-write', 'Expose mutating tools (repolith_checkout); off by default', false)
+  .action(async (opts: { manifest: string; allowWrite?: boolean }) => {
+    await startMcpServer(opts.manifest, { allowWrite: opts.allowWrite ?? false }).catch(fail);
   });
 
 program.parse();
