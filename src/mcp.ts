@@ -26,7 +26,7 @@ const jsonResult = (data: unknown) => ({
  */
 export function buildMcpServer(manifestPath: string, opts: McpOptions): McpServer {
   const manifestDir = resolve(manifestPath, '..');
-  const server = new McpServer({ name: 'repolith', version: '0.3.0' });
+  const server = new McpServer({ name: 'repolith', version: '0.3.1' });
   const loadManifest = async () => parseManifest(await readFile(manifestPath, 'utf8'));
 
   // READ — the deterministic system fingerprint

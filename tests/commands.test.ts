@@ -74,6 +74,14 @@ describe('command layer (against a synced workspace)', () => {
     expect(t).toContain('TODO');
   });
 
+  it('grep with -l lists files (git grep flags must precede the pattern)', async () => {
+    const cap = capture();
+    try { await grepCommand('TODO', ['-l'], manifestPath); } finally { cap.restore(); }
+    const t = cap.text();
+    expect(t).toContain('[hello] app.ts');
+    expect(t).not.toContain('TODO'); // -l prints filenames only, not the matched line
+  });
+
   it('log shows the repo header and commit subject', async () => {
     const cap = capture();
     try { await logCommand(['-n', '5'], manifestPath); } finally { cap.restore(); }

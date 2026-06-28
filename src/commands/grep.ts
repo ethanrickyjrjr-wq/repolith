@@ -16,8 +16,8 @@ export async function grepCommand(
 
   const results = await runAll(manifest.repos, async (repo) => {
     const dest = join(manifestDir, repo.path);
-    // git grep exits 1 when no matches — that's not an error for us
-    const { stdout } = await gitRun(dest, ['grep', '--color=never', '-n', pattern, ...extraArgs])
+    // git grep requires options BEFORE the pattern; it exits 1 on no matches (not an error for us)
+    const { stdout } = await gitRun(dest, ['grep', '--color=never', '-n', ...extraArgs, pattern])
       .catch(() => ({ stdout: '', stderr: '' }));
     return stdout;
   });
