@@ -2,7 +2,7 @@
   "name": "repolith-vscode",
   "displayName": "repolith — Workspace Composer",
   "description": "Makes a set of git repos feel like one folder",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "stanicky",
   "license": "MIT",
   "repository": {
