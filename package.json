@@ -1,6 +1,6 @@
 {
   "name": "repolith",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Make a set of independent git repos feel like one monorepo — TOML manifest, atomic lockfile hash, parallel git dispatch, a VS Code extension, and an MCP server for AI agents.",
   "keywords": [
     "git",

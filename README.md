@@ -2,7 +2,7 @@
 
 > Make a set of independent git repos feel like one monorepo — without touching git internals, GitHub, or CI.
 
-**Status: v0.1 — CLI complete.** All seven commands (`sync`, `status`, `grep`, `log`, `diff`, `exec`, `init`) are implemented and tested, and a VS Code extension is included. The MCP server and `checkout` (restore-from-lockfile) are next (v0.2). APIs may still change pre-1.0.
+**Status: v0.2 — CLI + MCP server.** All CLI commands (`sync`, `checkout`, `status`, `grep`, `log`, `diff`, `exec`, `init`, `bisect`) are implemented and tested, plus an **MCP server** (`repolith mcp`) so AI agents can query and restore workspace state, and a VS Code extension. APIs may still change pre-1.0.
 
 ## What it is
 
@@ -32,7 +32,20 @@ repolith sync                # clone/checkout every repo, write the lockfile
 repolith status              # branch + dirty/clean + ahead/behind, per repo
 repolith grep "TODO"         # search across all repos at once
 repolith exec "npm test"     # run a command in every repo
+repolith checkout            # restore every repo to the locked commit (deterministic)
+repolith bisect --good good.lock.json --test "npm test"  # find the repo+commit that broke the system
 ```
+
+## For AI agents (MCP)
+
+`repolith` ships an [MCP](https://modelcontextprotocol.io) server so coding agents can query and reconstruct multi-repo state deterministically — *git pins a repo; repolith pins a system.*
+
+```bash
+# register with Claude Code (read-only by default)
+claude mcp add repolith -- repolith mcp --manifest /path/to/repolith.toml
+```
+
+Tools exposed: `repolith_state` (atomic hash + per-repo commits), `repolith_status`, `repolith_grep`, `repolith_diff`. The mutating `repolith_checkout` is only exposed with `--allow-write`; `exec` is never exposed.
 
 ### Example `repolith.toml`
 

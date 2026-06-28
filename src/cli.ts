@@ -20,7 +20,7 @@ const program = new Command();
 program
   .name('repolith')
   .description('Make a set of independent git repos feel like one monorepo')
-  .version('0.1.0');
+  .version('0.2.0');
 
 program
   .command('sync')
