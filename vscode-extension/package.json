@@ -15,6 +15,7 @@
   "categories": ["Other"],
   "activationEvents": ["workspaceContains:repolith.toml"],
   "main": "./dist/extension.js",
+  "icon": "icon.png",
   "contributes": {
     "commands": [
       {

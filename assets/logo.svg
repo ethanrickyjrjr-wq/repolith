@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="repolith">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#171c2c"/>
+      <stop offset="1" stop-color="#0a0d14"/>
+    </linearGradient>
+    <linearGradient id="stone" x1="0" y1="0" x2="0.25" y2="1">
+      <stop offset="0" stop-color="#8b6cff"/>
+      <stop offset="0.5" stop-color="#5b8def"/>
+      <stop offset="1" stop-color="#36d6c3"/>
+    </linearGradient>
+  </defs>
+
+  <!-- app tile -->
+  <rect width="256" height="256" rx="58" fill="url(#bg)"/>
+
+  <!-- monolith: strata (repos) fused into one slab -->
+  <g>
+    <rect x="90" y="40" width="76" height="176" rx="16" fill="url(#stone)"/>
+
+    <!-- fused-stone seams between strata -->
+    <g stroke="#0a0d14" stroke-width="3" stroke-linecap="round" opacity="0.55">
+      <line x1="92" y1="84"  x2="164" y2="84"/>
+      <line x1="92" y1="128" x2="164" y2="128"/>
+      <line x1="92" y1="172" x2="164" y2="172"/>
+    </g>
+
+    <!-- left edge highlight + top sheen -->
+    <rect x="90" y="40" width="7" height="176" rx="3.5" fill="#ffffff" opacity="0.22"/>
+    <path d="M106 40 h44 a16 16 0 0 1 16 16 v6 H90 v-6 a16 16 0 0 1 16-16 z" fill="#ffffff" opacity="0.10"/>
+  </g>
+</svg>

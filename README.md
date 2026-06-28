@@ -1,6 +1,17 @@
-# repolith
+<p align="center">
+  <img src="assets/logo.svg" width="116" alt="repolith logo" />
+</p>
 
-> Make a set of independent git repos feel like one monorepo — without touching git internals, GitHub, or CI.
+<h1 align="center">repolith</h1>
+
+<p align="center"><em>Make a set of independent git repos feel like one monorepo — without touching git internals, GitHub, or CI.</em></p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/repolith"><img src="https://img.shields.io/npm/v/repolith?color=5b8def" alt="npm version"></a>
+  <a href="https://www.npmjs.com/package/repolith"><img src="https://img.shields.io/npm/dm/repolith?color=5b8def" alt="npm downloads"></a>
+  <a href="https://marketplace.visualstudio.com/items?itemName=stanicky.repolith-vscode"><img src="https://img.shields.io/visual-studio-marketplace/v/stanicky.repolith-vscode?color=36d6c3&label=VS%20Code" alt="VS Code Marketplace"></a>
+  <img src="https://img.shields.io/npm/l/repolith?color=8b6cff" alt="license">
+</p>
 
 **Status: v0.3 — CLI + MCP server.** All CLI commands (`sync`, `checkout`, `status`, `grep`, `log`, `diff`, `exec`, `init`, `bisect`, `state`, `freeze`, `open`) are implemented and tested — with `--json` on the read commands — plus an **MCP server** (`repolith mcp`) so AI agents can query and restore workspace state, and a VS Code extension. APIs may still change pre-1.0.
 
