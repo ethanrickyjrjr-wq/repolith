@@ -9,6 +9,7 @@ import { logCommand } from './commands/log.js';
 import { diffCommand } from './commands/diff.js';
 import { initCommand } from './commands/init.js';
 import { startMcpServer } from './mcp.js';
+import { bisect } from './commands/bisect.js';
 
 function fail(e: Error): never {
   console.error(e.message);
@@ -105,6 +106,27 @@ program
   .option('-f, --force', 'Overwrite an existing repolith.toml')
   .action(async (opts: { dir: string; force?: boolean }) => {
     await initCommand(opts.dir, opts.force ?? false).catch(fail);
+  });
+
+program
+  .command('bisect')
+  .description('Find the repo+commit across the whole workspace that made --test start failing')
+  .requiredOption('--good <lockfile>', 'Path to a known-good repolith.lock.json')
+  .requiredOption('--test <cmd>', 'Test command run at the workspace root; exit 0 = good, non-zero = bad')
+  .option('--manifest <path>', 'Path to repolith.toml', 'repolith.toml')
+  .action(async (opts: { good: string; test: string; manifest: string }) => {
+    const res = await bisect({ manifestPath: opts.manifest, goodLockPath: opts.good, test: opts.test }).catch(fail);
+    if (!res.culprit) {
+      console.log('No candidate commits between the good state and current — nothing to bisect.');
+      return;
+    }
+    const c = res.culprit;
+    console.log(`\nFirst bad commit: ${c.repo}@${c.commit.slice(0, 12)}`);
+    console.log(`  ${c.subject}  —  ${c.author}, ${c.when}`);
+    console.log(
+      `\n(${res.steps} test runs over ${res.timelineLength} candidate commits. ` +
+      `Finds *a* breaking point; assumes monotonic failure and counts build breakage as bad.)`,
+    );
   });
 
 program
