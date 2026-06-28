@@ -7,6 +7,7 @@
 <p align="center"><em>Make a set of independent git repos feel like one monorepo — without touching git internals, GitHub, or CI.</em></p>
 
 <p align="center">
+  <a href="https://github.com/ethanrickyjrjr-wq/repolith/actions/workflows/ci.yml"><img src="https://github.com/ethanrickyjrjr-wq/repolith/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://www.npmjs.com/package/repolith"><img src="https://img.shields.io/npm/v/repolith?color=5b8def" alt="npm version"></a>
   <a href="https://www.npmjs.com/package/repolith"><img src="https://img.shields.io/npm/dm/repolith?color=5b8def" alt="npm downloads"></a>
   <a href="https://marketplace.visualstudio.com/items?itemName=stanicky.repolith-vscode"><img src="https://img.shields.io/visual-studio-marketplace/v/stanicky.repolith-vscode?color=36d6c3&label=VS%20Code" alt="VS Code Marketplace"></a>
