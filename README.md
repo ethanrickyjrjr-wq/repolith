@@ -24,6 +24,8 @@ npm i -g repolith
 bun add -g repolith
 ```
 
+**VS Code extension:** search "repolith" in the Extensions view, or install [`stanicky.repolith-vscode`](https://marketplace.visualstudio.com/items?itemName=stanicky.repolith-vscode).
+
 ## Quick start
 
 ```bash
