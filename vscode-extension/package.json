@@ -1,0 +1,35 @@
+{
+  "name": "repolith-vscode",
+  "displayName": "repolith — Workspace Composer",
+  "description": "Makes a set of git repos feel like one folder",
+  "version": "0.1.0",
+  "publisher": "ethanrickyjrjr",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": ["workspaceContains:repolith.toml"],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "repolith.sync",
+        "title": "Repolith: Sync Repos"
+      },
+      {
+        "command": "repolith.search",
+        "title": "Repolith: Search Across Repos"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --platform=node --target=node20",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.1",
+    "@types/vscode": "^1.125.0",
+    "esbuild": "^0.28.1",
+    "typescript": "^6.0.3"
+  }
+}
