@@ -9,3 +9,9 @@ dist/
 .env
 .env.local
 .env.*.local
+
+# internal strategy / competitive / monetization docs — local only, off the public tree
+docs/plan-review.md
+docs/research.md
+docs/research-findings.md
+docs/plan-v3-server.md
