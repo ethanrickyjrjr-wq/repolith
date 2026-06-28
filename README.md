@@ -2,7 +2,7 @@
 
 > Make a set of independent git repos feel like one monorepo — without touching git internals, GitHub, or CI.
 
-**Status: early / under active development (v0.0.x).** The name is reserved and the core is being built task-by-task. APIs and commands will change until v0.1.
+**Status: v0.1 — CLI complete.** All seven commands (`sync`, `status`, `grep`, `log`, `diff`, `exec`, `init`) are implemented and tested, and a VS Code extension is included. The MCP server and `checkout` (restore-from-lockfile) are next (v0.2). APIs may still change pre-1.0.
 
 ## What it is
 
@@ -24,7 +24,7 @@ npm i -g repolith
 bun add -g repolith
 ```
 
-## Quick start (target shape — not all commands shipped yet)
+## Quick start
 
 ```bash
 repolith init                # interactively create repolith.toml
