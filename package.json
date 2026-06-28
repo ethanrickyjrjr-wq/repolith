@@ -16,6 +16,14 @@
   ],
   "license": "MIT",
   "author": "Ricky Cooper",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ethanrickyjrjr-wq/Repolith.git"
+  },
+  "homepage": "https://github.com/ethanrickyjrjr-wq/Repolith#readme",
+  "bugs": {
+    "url": "https://github.com/ethanrickyjrjr-wq/Repolith/issues"
+  },
   "type": "module",
   "bin": {
     "repolith": "dist/cli.js"
