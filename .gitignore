@@ -4,3 +4,8 @@ dist/
 .DS_Store
 *.tsbuildinfo
 *.vsix
+
+# secrets — never commit
+.env
+.env.local
+.env.*.local
