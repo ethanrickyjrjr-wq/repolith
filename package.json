@@ -18,11 +18,11 @@
   "author": "Ricky Cooper",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ethanrickyjrjr-wq/Repolith.git"
+    "url": "git+https://github.com/ethanrickyjrjr-wq/repolith.git"
   },
-  "homepage": "https://github.com/ethanrickyjrjr-wq/Repolith#readme",
+  "homepage": "https://github.com/ethanrickyjrjr-wq/repolith#readme",
   "bugs": {
-    "url": "https://github.com/ethanrickyjrjr-wq/Repolith/issues"
+    "url": "https://github.com/ethanrickyjrjr-wq/repolith/issues"
   },
   "type": "module",
   "bin": {
