@@ -3,7 +3,12 @@
   "displayName": "repolith — Workspace Composer",
   "description": "Makes a set of git repos feel like one folder",
   "version": "0.1.0",
-  "publisher": "ethanrickyjrjr",
+  "publisher": "stanicky",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ethanrickyjrjr-wq/repolith.git"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -24,11 +29,12 @@
   },
   "scripts": {
     "compile": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --platform=node --target=node20",
+    "vscode:prepublish": "npm run compile",
     "package": "vsce package"
   },
   "devDependencies": {
     "@types/node": "^26.0.1",
-    "@types/vscode": "^1.125.0",
+    "@types/vscode": "1.85.0",
     "esbuild": "^0.28.1",
     "typescript": "^6.0.3"
   }
