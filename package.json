@@ -40,7 +40,8 @@
     "build": "bun build src/cli.ts --outfile dist/cli.js --target node",
     "test": "bun test",
     "dev": "bun run src/cli.ts",
-    "prepublishOnly": "bun run build"
+    "prepublishOnly": "bun run build",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
