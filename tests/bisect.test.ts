@@ -16,6 +16,15 @@ let aGood: string;
 let bBad: string;
 const ID = ['-c', 'user.email=test@example.com', '-c', 'user.name=Test'];
 
+// Every case here spawns real `git` and `node` processes and checks out across two
+// repos, so Bun's 5s default is a load-dependent coin flip, not a real assertion —
+// it flaked at 7.3s under nothing worse than a second session touching the disk.
+// Setup is the heaviest step (2 bare inits, 2 clones, 4 commits, 2 pushes, a full
+// syncCommand), so it gets the larger budget. These bound runaway hangs; they are
+// not performance assertions.
+const SETUP_TIMEOUT = 120_000;
+const CASE_TIMEOUT = 60_000;
+
 // commit with a controlled committer date so the merged timeline order is deterministic
 async function commit(cwd: string, file: string, content: string, msg: string, date: string): Promise<string> {
   await writeFile(join(cwd, file), content);
@@ -85,13 +94,13 @@ beforeAll(async () => {
     '});',
     'process.exit(bad ? 1 : 0);',
   ].join('\n'));
-});
+}, SETUP_TIMEOUT);
 
 afterAll(async () => {
   await rm(remoteA, { recursive: true });
   await rm(remoteB, { recursive: true });
   await rm(wsDir, { recursive: true });
-});
+}, SETUP_TIMEOUT);
 
 describe('cross-repo bisect', () => {
   it('blames the bug commit in repo b, not the innocent later state in repo a', async () => {
@@ -101,11 +110,11 @@ describe('cross-repo bisect', () => {
     expect(res.culprit!.repo).toBe('b');
     expect(res.culprit!.commit).toBe(bBad);
     expect(res.culprit!.subject).toContain('introduce the bug');
-  });
+  }, CASE_TIMEOUT);
 
   it('errors when the test passes at the current state (nothing to bisect)', async () => {
     // a test that always passes
     await expect(bisect({ manifestPath, goodLockPath, test: 'node -e "process.exit(0)"' }))
       .rejects.toThrow('nothing to bisect');
-  });
+  }, CASE_TIMEOUT);
 });
