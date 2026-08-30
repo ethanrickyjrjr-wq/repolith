@@ -18,6 +18,11 @@
 
 > git pins a repo. repolith pins a *system* — and coordinates every agent working inside it.
 
+<p align="center">
+  <img src="assets/demo.gif" width="900" alt="Two Claude Code sessions edit the same file: session A claims it on first touch, session B is denied with the holder named, waits, and auto-resumes the moment A commits." />
+</p>
+<p align="center"><sub>Real <code>repolith</code> from npm, nothing mocked — <code>edit</code> is a 10-line wrapper that feeds <code>repolith edit-hook</code> the exact payload Claude Code's Edit tool sends. Re-render with <code>cd assets/demo &amp;&amp; vhs demo.tape</code> (see <a href="assets/demo/README.md">assets/demo</a>).</sub></p>
+
 ## The problem
 
 You run two or three Claude Code sessions on the same repo. Each one plans, each one edits, each one is individually correct — and then one overwrites the other's half-finished change, or both do the same work, or the merge conflict shows up *after* both have burned an hour of tokens.
