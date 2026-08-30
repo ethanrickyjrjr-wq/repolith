@@ -2,13 +2,16 @@
 
 ## What This Is
 
-`repolith` is a CLI + VS Code extension that makes a set of independent git repos feel like one monorepo. No kernel drivers. No new object model. No patch theory. Git stays git, GitHub stays GitHub, CI stays CI.
+`repolith` is a CLI + MCP server + VS Code extension with two layers:
 
-Four pieces:
-1. `repolith.toml` — manifest declaring which repos belong together and where they live
-2. `repolith.lock.json` — lockfile with each repo's pinned commit SHA + an atomic workspace hash
-3. CLI (`repolith sync`, `repolith status`, `repolith grep`, `repolith log`, `repolith diff`, `repolith exec`, `repolith init`) — dispatches in parallel, unified output
-4. VS Code extension — repos appear as sidebar folders, cross-repo quick-pick search
+1. **Coordination layer (`src/coord/`, the headline since v0.4):** coordinates parallel AI coding sessions in one workspace. Plan-time overlap catch via a `PreToolUse` hook on `ExitPlanMode` (plus spec-file registration), an edit gate that claims files on first touch and denies a second live session, a Bash backstop for edits that bypass `Edit`/`Write`, `claim wait` auto-resume with FIFO fairness and deadlock surfacing, a file-keyed journal with read-before-touch and a SessionStart catch-up brief, heartbeats, git-verified staleness, and operator-override revocation. Store is same-machine JSON under `<workspace>/.repolith/`. CLI: `hooks install`, `plan …`, `claim …`. Hooks/commands are wired in `src/commands/{plan,claim,hooks,hook-stdin,bash,spec,session}.ts`; MCP tools in `src/mcp.ts`.
+2. **Multi-repo layer:** makes a set of independent git repos feel like one monorepo. No kernel drivers. No new object model. No patch theory. Git stays git, GitHub stays GitHub, CI stays CI.
+   - `repolith.toml` — manifest declaring which repos belong together and where they live (optional `[coord]` table: `append_only`, `spec_patterns`)
+   - `repolith.lock.json` — lockfile with each repo's pinned commit SHA + an atomic workspace hash
+   - CLI (`sync`, `checkout`, `status`, `grep`, `log`, `diff`, `exec`, `init`, `bisect`, `state`, `freeze`, `open`) — dispatches in parallel, unified output
+   - VS Code extension — repos appear as sidebar folders, cross-repo quick-pick search
+
+Every hook command must exit 0 on any internal failure — coordination is advisory infrastructure and must never break the user's edit or plan flow.
 
 ## Stack
 

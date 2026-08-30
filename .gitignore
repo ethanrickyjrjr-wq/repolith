@@ -5,14 +5,16 @@ dist/
 *.tsbuildinfo
 *.vsix
 
+# plan-coordination session store (same-machine scratch state)
+.repolith/
+
+# firecrawl scrape cache (in-session vendor-doc verification — scratch only)
+.firecrawl/
+
 # secrets — never commit
 .env
 .env.local
 .env.*.local
 
-# internal strategy / competitive / monetization docs — local only, off the public tree
-docs/plan-review.md
-docs/research.md
-docs/research-findings.md
-docs/plan-v3-server.md
-docs/plan-v4-coordination.md
+# local-only Claude Code instructions
+CLAUDE.local.md
