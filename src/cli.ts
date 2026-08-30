@@ -166,9 +166,15 @@ program
   .command('mcp')
   .description('Run repolith as an MCP server (stdio) so AI agents can query and restore workspace state')
   .option('--manifest <path>', 'Path to repolith.toml', 'repolith.toml')
-  .option('--allow-write', 'Expose mutating tools (repolith_checkout); off by default', false)
-  .action(async (opts: { manifest: string; allowWrite?: boolean }) => {
-    await startMcpServer(opts.manifest, { allowWrite: opts.allowWrite ?? false }).catch(fail);
+  .requiredOption('--agent-id <id>', 'Identity of the agent/session running this server; recorded on every audit log entry')
+  .option('--grants <path>', 'Path to repolith.grants.toml granting this agent-id write capabilities (e.g. checkout); omit for a read-only agent')
+  .option('--audit <path>', 'Path to the append-only audit log (default: repolith.audit.jsonl next to the manifest)')
+  .action(async (opts: { manifest: string; agentId: string; grants?: string; audit?: string }) => {
+    await startMcpServer(opts.manifest, {
+      agentId: opts.agentId,
+      grantsPath: opts.grants,
+      auditPath: opts.audit,
+    }).catch(fail);
   });
 
 program.parse();

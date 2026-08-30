@@ -7,6 +7,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { syncCommand } from '../src/commands/sync';
 import { buildMcpServer, type McpOptions } from '../src/mcp';
+import { readAuditLog } from '../src/audit';
 
 let remoteDir: string;
 let wsDir: string;
@@ -39,25 +40,35 @@ afterAll(async () => {
   await rm(wsDir, { recursive: true });
 });
 
-async function connect(opts: McpOptions) {
-  const server = buildMcpServer(manifestPath, opts);
+let auditCounter = 0;
+async function connect(opts: Partial<McpOptions> & { agentId: string }) {
+  const auditPath = opts.auditPath ?? join(wsDir, `audit-${auditCounter++}.jsonl`);
+  const server = await buildMcpServer(manifestPath, { ...opts, auditPath });
   const [clientT, serverT] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: 'test', version: '0.0.0' });
   await Promise.all([server.connect(serverT), client.connect(clientT)]);
-  return { client, close: async () => { await client.close(); await server.close(); } };
+  return {
+    client,
+    auditPath,
+    close: async () => {
+      await client.close();
+      await server.close();
+    },
+  };
 }
 
 const textOf = (res: { content: Array<{ text?: string }> }): string => res.content[0].text ?? '';
 
 describe('repolith mcp server', () => {
-  it('exposes read tools and hides checkout without --allow-write', async () => {
-    const { client, close } = await connect({ allowWrite: false });
+  it('exposes read tools including the audit log, and hides checkout with no grants file', async () => {
+    const { client, close } = await connect({ agentId: 'alice' });
     try {
       const names = (await client.listTools()).tools.map((t) => t.name);
       expect(names).toContain('repolith_state');
       expect(names).toContain('repolith_status');
       expect(names).toContain('repolith_grep');
       expect(names).toContain('repolith_diff');
+      expect(names).toContain('repolith_audit');
       expect(names).not.toContain('repolith_checkout');
     } finally {
       await close();
@@ -65,7 +76,7 @@ describe('repolith mcp server', () => {
   });
 
   it('repolith_state returns the atomic hash + pinned commit', async () => {
-    const { client, close } = await connect({ allowWrite: false });
+    const { client, close } = await connect({ agentId: 'alice' });
     try {
       const res = await client.callTool({ name: 'repolith_state', arguments: {} });
       const data = JSON.parse(textOf(res as never));
@@ -77,7 +88,7 @@ describe('repolith mcp server', () => {
   });
 
   it('repolith_grep finds matches grouped by repo', async () => {
-    const { client, close } = await connect({ allowWrite: false });
+    const { client, close } = await connect({ agentId: 'alice' });
     try {
       const res = await client.callTool({ name: 'repolith_grep', arguments: { pattern: 'TODO' } });
       const data = JSON.parse(textOf(res as never));
@@ -88,11 +99,53 @@ describe('repolith mcp server', () => {
     }
   });
 
-  it('exposes repolith_checkout when --allow-write is set', async () => {
-    const { client, close } = await connect({ allowWrite: true });
+  it('exposes repolith_checkout only for an agent-id granted it in repolith.grants.toml', async () => {
+    const grantsPath = join(wsDir, 'grants-mixed.toml');
+    await writeFile(grantsPath, '[agents.alice]\ncheckout = true\n\n[agents.bob]\ncheckout = false\n', 'utf8');
+
+    const alice = await connect({ agentId: 'alice', grantsPath });
+    const bob = await connect({ agentId: 'bob', grantsPath });
+    try {
+      const aliceNames = (await alice.client.listTools()).tools.map((t) => t.name);
+      const bobNames = (await bob.client.listTools()).tools.map((t) => t.name);
+      expect(aliceNames).toContain('repolith_checkout');
+      expect(bobNames).not.toContain('repolith_checkout');
+    } finally {
+      await alice.close();
+      await bob.close();
+    }
+  });
+
+  it('still hides checkout for an agent-id with a grants file that never mentions it', async () => {
+    const grantsPath = join(wsDir, 'grants-empty.toml');
+    await writeFile(grantsPath, '[agents.alice]\ncheckout = true\n', 'utf8');
+
+    const { client, close } = await connect({ agentId: 'stranger', grantsPath });
     try {
       const names = (await client.listTools()).tools.map((t) => t.name);
-      expect(names).toContain('repolith_checkout');
+      expect(names).not.toContain('repolith_checkout');
+    } finally {
+      await close();
+    }
+  });
+
+  it('records every tool call in the hash-chained audit log, tagged with this agent-id', async () => {
+    const { client, close, auditPath } = await connect({ agentId: 'alice' });
+    try {
+      await client.callTool({ name: 'repolith_state', arguments: {} });
+      await client.callTool({ name: 'repolith_grep', arguments: { pattern: 'TODO' } });
+
+      const res = await client.callTool({ name: 'repolith_audit', arguments: {} });
+      const data = JSON.parse(textOf(res as never));
+      // repolith_audit reads the log as of just before its own call is appended.
+      expect(data.verified).toBe(true);
+      expect(data.entries).toBe(2);
+      expect(data.log.every((e: { agentId: string }) => e.agentId === 'alice')).toBe(true);
+      expect(data.log.map((e: { tool: string }) => e.tool)).toEqual(['repolith_state', 'repolith_grep']);
+
+      const onDisk = await readAuditLog(auditPath);
+      expect(onDisk).toHaveLength(3); // + the repolith_audit call itself
+      expect(onDisk[2]!.tool).toBe('repolith_audit');
     } finally {
       await close();
     }

@@ -14,7 +14,7 @@
   <img src="https://img.shields.io/npm/l/repolith?color=8b6cff" alt="license">
 </p>
 
-**Status: v0.3 — CLI + MCP server.** All CLI commands (`sync`, `checkout`, `status`, `grep`, `log`, `diff`, `exec`, `init`, `bisect`, `state`, `freeze`, `open`) are implemented and tested — with `--json` on the read commands — plus an **MCP server** (`repolith mcp`) so AI agents can query and restore workspace state, and a VS Code extension. APIs may still change pre-1.0.
+**Status: v0.3 — CLI + MCP server.** All CLI commands (`sync`, `checkout`, `status`, `grep`, `log`, `diff`, `exec`, `init`, `bisect`, `state`, `freeze`, `open`) are implemented and tested — with `--json` on the read commands — plus an **MCP server** (`repolith mcp`) so AI agents can query and restore workspace state, guarded by per-agent grants and a hash-chained audit log, and a VS Code extension. APIs may still change pre-1.0.
 
 ## What it is
 
@@ -60,11 +60,32 @@ repolith open snap.json      # reconstruct the exact system from a shared snapsh
 `repolith` ships an [MCP](https://modelcontextprotocol.io) server so coding agents can query and reconstruct multi-repo state deterministically — *git pins a repo; repolith pins a system.*
 
 ```bash
-# register with Claude Code (read-only by default)
-claude mcp add repolith -- repolith mcp --manifest /path/to/repolith.toml
+# register with Claude Code — every server needs an --agent-id, and is read-only
+# unless a repolith.grants.toml explicitly grants it write capabilities
+claude mcp add repolith -- repolith mcp --manifest /path/to/repolith.toml --agent-id claude-frontend
 ```
 
-Tools exposed: `repolith_state` (atomic hash + per-repo commits), `repolith_status`, `repolith_grep`, `repolith_diff`. The mutating `repolith_checkout` is only exposed with `--allow-write`; `exec` is never exposed.
+Tools exposed: `repolith_state` (atomic hash + per-repo commits), `repolith_status`, `repolith_grep`, `repolith_diff`, `repolith_audit` (the tamper-evident log of every call below). The mutating `repolith_checkout` is only exposed to an `--agent-id` with a `checkout = true` grant; `exec` is never exposed at all.
+
+### Guardrails: per-agent grants + an append-only audit log
+
+Running multiple agents against one workspace means more than one `repolith mcp` process can be live at once — each one needs its own identity and its own explicit capabilities, not a single global on/off switch. Two pieces make that concrete:
+
+**`repolith.grants.toml`** — declares which agent-ids may call which mutating tools. Absent = read-only, no matter what agent-id connects:
+
+```toml
+[agents.claude-frontend]
+checkout = true
+
+[agents.claude-reviewer]
+checkout = false   # or just omit the agent entirely — same effect
+```
+
+```bash
+repolith mcp --manifest repolith.toml --agent-id claude-frontend --grants repolith.grants.toml
+```
+
+**`repolith.audit.jsonl`** — every tool call (read or write, success or failure) is appended here as a hash-chained entry: `{ts, agentId, tool, args, ok, error, prevHash, hash}`, where `hash` covers `prevHash` plus that entry's own fields. Rewriting or dropping a past entry breaks the chain from that point forward, which the always-on `repolith_audit` tool surfaces as `verified: false` plus the line it broke at. This catches tampering after the fact; it does not itself stop two separate `repolith mcp` processes from racing on the same log file (only concurrent calls *within* one process are serialized) — a real limitation, not swept under the rug.
 
 ### Example `repolith.toml`
 

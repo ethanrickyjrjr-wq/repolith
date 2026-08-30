@@ -26,6 +26,8 @@ Four pieces:
 - Concurrency cap default = 8, overridable via REPOLITH_CONCURRENCY env var
 - VS Code extension uses workspace.updateWorkspaceFolders() -- native API, no .code-workspace file required
 - repolith exec runs in each repo's directory, captures stdout/stderr per repo
+- MCP write access is per-agent, not a single global flag -- `repolith mcp` now requires `--agent-id` and only registers `repolith_checkout` when `repolith.grants.toml` grants that specific agent-id `checkout = true`; no grants file = read-only regardless of agent-id
+- Every MCP tool call (read or write, success or failure) is appended to a hash-chained `repolith.audit.jsonl` -- each entry's hash covers its own fields plus the prior entry's hash, so tampering with a past line is detectable via the always-on `repolith_audit` tool. In-process concurrent calls are serialized before appending; two separate `repolith mcp` processes racing on the same log file is a known, undefended gap (would need an OS file lock) -- not solved in v1
 
 ## Prior Art (see docs/research.md + docs/research-findings.md for full notes)
 
