@@ -17,7 +17,14 @@ repolith now coordinates parallel AI coding sessions working in the same workspa
 - **New MCP tools:** `repolith_register_plan`, `repolith_compare_plans`, `repolith_list_active`, `repolith_claim`, `repolith_check`, `repolith_release`, `repolith_list_claims`, `repolith_wait_claim`.
 - **Cross-session text is sanitized** at every context-injection sink.
 
+### Added — MCP guardrails
+
+- `repolith mcp` now requires `--agent-id`; `repolith_checkout` is only registered for an agent-id with `checkout = true` in `repolith.grants.toml` (`--grants`). No grants file = read-only. Replaces `--allow-write`.
+- Every MCP tool call — workspace and coordination, success or failure — is appended to a hash-chained `repolith.audit.jsonl` (`--audit`), verifiable through the always-on `repolith_audit` tool.
+
 ### Changed
+
+- **Breaking (MCP):** `--allow-write` is gone; use `--agent-id` + a grants file.
 
 - README leads with coordination; multi-repo composition is the supporting layer.
 

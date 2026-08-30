@@ -119,11 +119,32 @@ ref  = "main"
 ## For AI agents (MCP)
 
 ```bash
-claude mcp add repolith -- repolith mcp --manifest /path/to/repolith.toml
+# every server needs an --agent-id; it is read-only unless a repolith.grants.toml grants it more
+claude mcp add repolith -- repolith mcp --manifest /path/to/repolith.toml --agent-id claude-frontend
 ```
 
-Workspace tools: `repolith_state`, `repolith_status`, `repolith_grep`, `repolith_diff` (read-only; `repolith_checkout` only with `--allow-write`; `exec` is never exposed).
-Coordination tools: `repolith_register_plan`, `repolith_compare_plans`, `repolith_list_active`, `repolith_claim`, `repolith_check`, `repolith_release`, `repolith_list_claims`, `repolith_wait_claim`.
+Workspace tools: `repolith_state`, `repolith_status`, `repolith_grep`, `repolith_diff`, `repolith_audit`. The mutating `repolith_checkout` is only registered for an agent-id with a `checkout = true` grant; `exec` is never exposed.
+Coordination tools (always on — they only touch `.repolith/`): `repolith_register_plan`, `repolith_compare_plans`, `repolith_list_active`, `repolith_claim`, `repolith_check`, `repolith_release`, `repolith_list_claims`, `repolith_wait_claim`.
+
+### Guardrails: per-agent grants + an append-only audit log
+
+More than one `repolith mcp` process can be live against one workspace, so each gets its own identity and its own explicit capabilities — not one global switch.
+
+**`repolith.grants.toml`** — which agent-ids may call which mutating tools. Absent = read-only, whatever agent-id connects:
+
+```toml
+[agents.claude-frontend]
+checkout = true
+
+[agents.claude-reviewer]
+checkout = false   # or omit the agent entirely — same effect
+```
+
+```bash
+repolith mcp --manifest repolith.toml --agent-id claude-frontend --grants repolith.grants.toml
+```
+
+**`repolith.audit.jsonl`** — every tool call (read or write, success or failure, coordination included) is appended as a hash-chained entry `{ts, agentId, tool, args, ok, error, prevHash, hash}`. Rewriting or dropping a past entry breaks the chain from that point on, which `repolith_audit` reports as `verified: false` plus the line it broke at. It catches tampering after the fact; it does not stop two separate `repolith mcp` processes racing on the same log file (only calls within one process are serialized) — a real limitation, not swept under the rug.
 
 ## Limitations (read these)
 

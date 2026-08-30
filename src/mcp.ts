@@ -31,26 +31,76 @@ import { waitForClaim } from './coord/waits.js';
 import { extractAreas, firstLine } from './coord/extract.js';
 import { compareAgainstActive } from './coord/overlap.js';
 import { renderSemanticCheck } from './coord/semantic.js';
+import { loadGrants, hasGrant } from './grants.js';
+import { appendAuditEntry, readAuditLog, verifyAuditLog } from './audit.js';
 import type { LockRepo } from './types.js';
 
+// Arg shapes for the coordination tools (mirror their zod inputSchemas) so audited() can type them.
+interface RegisterArgs { summary?: string; areas?: string[]; plan?: string; session_id?: string; ttl_sec?: number }
+interface CompareArgs { areas?: string[]; plan?: string; session_id?: string }
+interface FilesArgs { files: string[]; session_id?: string }
+interface ReleaseArgs { files?: string[]; session_id?: string }
+interface WaitArgs { file: string; session_id?: string; timeout_sec?: number }
+
 export interface McpOptions {
-  /** Expose mutating tools (repolith_checkout). Off by default. */
-  allowWrite: boolean;
+  /** Identity of the agent/session running this server process. Recorded on every audit entry. */
+  agentId: string;
+  /** Path to a repolith.grants.toml granting this agent-id write capabilities. Omit = read-only. */
+  grantsPath?: string;
+  /** Path to the append-only, hash-chained audit log. Defaults to repolith.audit.jsonl next to the manifest. */
+  auditPath?: string;
 }
 
-const jsonResult = (data: unknown) => ({
+type ToolResult = { content: { type: 'text'; text: string }[] };
+
+const jsonResult = (data: unknown): ToolResult => ({
   content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }],
 });
 
 /**
- * Build the repolith MCP server. Read tools are always registered; the mutating
- * `repolith_checkout` tool is only registered when `allowWrite` is true. No tool
- * writes to stdout (it is the JSON-RPC channel for the stdio transport).
+ * Build the repolith MCP server. Read tools (state/status/grep/diff/audit) are always
+ * registered; the mutating `repolith_checkout` tool is only registered when the calling
+ * agent-id has a `checkout = true` grant in repolith.grants.toml. Every tool call — read
+ * or write, success or failure — is appended to the hash-chained audit log tagged with
+ * this server's agent-id, so "who did what" survives even for read-only reconnaissance.
+ * No tool writes to stdout (it is the JSON-RPC channel for the stdio transport).
  */
-export function buildMcpServer(manifestPath: string, opts: McpOptions): McpServer {
+export async function buildMcpServer(manifestPath: string, opts: McpOptions): Promise<McpServer> {
   const manifestDir = resolve(manifestPath, '..');
+  const auditPath = opts.auditPath ?? join(manifestDir, 'repolith.audit.jsonl');
+  const grants = await loadGrants(opts.grantsPath);
   const server = new McpServer({ name: 'repolith', version: '0.4.0' });
   const loadManifest = async () => parseManifest(await readFile(manifestPath, 'utf8'));
+
+  function audited<A>(
+    tool: string,
+    summarize: (args: A) => unknown,
+    handler: (args: A) => Promise<ToolResult>,
+  ) {
+    return async (args: A): Promise<ToolResult> => {
+      try {
+        const result = await handler(args);
+        await appendAuditEntry(auditPath, {
+          ts: new Date().toISOString(),
+          agentId: opts.agentId,
+          tool,
+          args: summarize(args),
+          ok: true,
+        });
+        return result;
+      } catch (e) {
+        await appendAuditEntry(auditPath, {
+          ts: new Date().toISOString(),
+          agentId: opts.agentId,
+          tool,
+          args: summarize(args),
+          ok: false,
+          error: (e as Error).message,
+        });
+        throw e;
+      }
+    };
+  }
 
   // READ — the deterministic system fingerprint
   server.registerTool(
@@ -60,7 +110,7 @@ export function buildMcpServer(manifestPath: string, opts: McpOptions): McpServe
       description:
         "The atomic workspace hash plus each repo's current commit — the deterministic fingerprint of the whole multi-repo system.",
     },
-    async () => {
+    audited('repolith_state', () => ({}), async () => {
       const manifest = await loadManifest();
       const results = await runAll(manifest.repos, async (repo) => {
         const { stdout } = await gitRun(join(manifestDir, repo.path), ['rev-parse', 'HEAD']);
@@ -71,7 +121,7 @@ export function buildMcpServer(manifestPath: string, opts: McpOptions): McpServe
         if (r.ok) repos[r.repo.name] = { url: r.repo.url, ref: r.repo.ref, commit: r.value };
       }
       return jsonResult({ workspace: manifest.name, hash: computeHash(repos), repos });
-    },
+    }),
   );
 
   // READ — structured status
@@ -81,7 +131,7 @@ export function buildMcpServer(manifestPath: string, opts: McpOptions): McpServe
       title: 'Repo status',
       description: 'Branch, dirty/clean, and ahead/behind counts for every repo.',
     },
-    async () => {
+    audited('repolith_status', () => ({}), async () => {
       const manifest = await loadManifest();
       const results = await runAll(manifest.repos, async (repo) => {
         const dest = join(manifestDir, repo.path);
@@ -104,7 +154,7 @@ export function buildMcpServer(manifestPath: string, opts: McpOptions): McpServe
           r.ok ? { repo: r.repo.name, ...r.value } : { repo: r.repo.name, error: r.error.message },
         ),
       );
-    },
+    }),
   );
 
   // READ — cross-repo grep
@@ -115,19 +165,23 @@ export function buildMcpServer(manifestPath: string, opts: McpOptions): McpServe
       description: 'Search a regex across every repo. Returns matches grouped by repo.',
       inputSchema: { pattern: z.string().describe('Pattern passed to git grep') },
     },
-    async ({ pattern }) => {
-      const manifest = await loadManifest();
-      const results = await runAll(manifest.repos, async (repo) => {
-        const { stdout } = await gitRun(join(manifestDir, repo.path), ['grep', '-n', '--color=never', pattern])
-          .catch(() => ({ stdout: '', stderr: '' }));
-        return stdout;
-      });
-      const matches: { repo: string; hits: string[] }[] = [];
-      for (const r of results) {
-        if (r.ok && r.value.trim()) matches.push({ repo: r.repo.name, hits: r.value.trim().split('\n') });
-      }
-      return jsonResult(matches);
-    },
+    audited(
+      'repolith_grep',
+      (args: { pattern: string }) => ({ pattern: args.pattern }),
+      async ({ pattern }: { pattern: string }) => {
+        const manifest = await loadManifest();
+        const results = await runAll(manifest.repos, async (repo) => {
+          const { stdout } = await gitRun(join(manifestDir, repo.path), ['grep', '-n', '--color=never', pattern])
+            .catch(() => ({ stdout: '', stderr: '' }));
+          return stdout;
+        });
+        const matches: { repo: string; hits: string[] }[] = [];
+        for (const r of results) {
+          if (r.ok && r.value.trim()) matches.push({ repo: r.repo.name, hits: r.value.trim().split('\n') });
+        }
+        return jsonResult(matches);
+      },
+    ),
   );
 
   // READ — per-repo working-tree diff
@@ -137,7 +191,7 @@ export function buildMcpServer(manifestPath: string, opts: McpOptions): McpServe
       title: 'Diff across repos',
       description: 'Working-tree diff for every repo (empty string when clean).',
     },
-    async () => {
+    audited('repolith_diff', () => ({}), async () => {
       const manifest = await loadManifest();
       const results = await runAll(manifest.repos, async (repo) => {
         const { stdout } = await gitRun(join(manifestDir, repo.path), ['diff']);
@@ -148,7 +202,7 @@ export function buildMcpServer(manifestPath: string, opts: McpOptions): McpServe
           r.ok ? { repo: r.repo.name, diff: r.value } : { repo: r.repo.name, error: r.error.message },
         ),
       );
-    },
+    }),
   );
 
   // COORDINATION — register this session's plan + report conflicts with other
@@ -171,7 +225,7 @@ export function buildMcpServer(manifestPath: string, opts: McpOptions): McpServe
         ttl_sec: z.number().optional().describe('Seconds before this registration goes stale (default 3600).'),
       },
     },
-    async ({ summary, areas, plan, session_id, ttl_sec }) => {
+    audited('repolith_register_plan', (a: RegisterArgs) => ({ summary: a.summary, areas: a.areas, session_id: a.session_id }), async ({ summary, areas, plan, session_id, ttl_sec }: RegisterArgs) => {
       const manifest = await loadManifest();
       const id = session_id ?? `mcp-${process.pid}`;
       const resolvedAreas = areas?.length ? areas : extractAreas(plan);
@@ -195,7 +249,7 @@ export function buildMcpServer(manifestPath: string, opts: McpOptions): McpServe
         ...compareAgainstActive(me, others),
         semantic_check: renderSemanticCheck(me, others), // Phase 3 — coupling path-overlap can't see; null when alone
       });
-    },
+    }),
   );
 
   server.registerTool(
@@ -210,7 +264,7 @@ export function buildMcpServer(manifestPath: string, opts: McpOptions): McpServe
         session_id: z.string().optional().describe('Exclude this session id from the comparison.'),
       },
     },
-    async ({ areas, plan, session_id }) => {
+    audited('repolith_compare_plans', (a: CompareArgs) => ({ areas: a.areas, session_id: a.session_id }), async ({ areas, plan, session_id }: CompareArgs) => {
       const me = {
         session_id: session_id ?? 'probe',
         summary: firstLine(plan),
@@ -222,7 +276,7 @@ export function buildMcpServer(manifestPath: string, opts: McpOptions): McpServe
         ...compareAgainstActive(me, others),
         semantic_check: renderSemanticCheck(me, others),
       });
-    },
+    }),
   );
 
   server.registerTool(
@@ -231,7 +285,7 @@ export function buildMcpServer(manifestPath: string, opts: McpOptions): McpServe
       title: 'List active planning sessions',
       description: 'Active (non-stale) sessions and their declared blast radius.',
     },
-    async () => jsonResult(await listActive(manifestDir, Date.now())),
+    audited('repolith_list_active', () => ({}), async () => jsonResult(await listActive(manifestDir, Date.now()))),
   );
 
   // COORDINATION — file claims (the edit-gate backstop). claim-on-first-touch:
@@ -249,13 +303,13 @@ export function buildMcpServer(manifestPath: string, opts: McpOptions): McpServe
         session_id: z.string().optional(),
       },
     },
-    async ({ files, session_id }) => {
+    audited('repolith_claim', (a: FilesArgs) => ({ files: a.files, session_id: a.session_id }), async ({ files, session_id }: FilesArgs) => {
       const id = session_id ?? `mcp-${process.pid}`;
       const now = Date.now();
       const results = [];
       for (const f of files) results.push(explainOutcome(await claimFile(manifestDir, normRel(f), id, now)));
       return jsonResult({ session_id: id, results });
-    },
+    }),
   );
 
   server.registerTool(
@@ -268,13 +322,13 @@ export function buildMcpServer(manifestPath: string, opts: McpOptions): McpServe
         session_id: z.string().optional(),
       },
     },
-    async ({ files, session_id }) => {
+    audited('repolith_check', (a: FilesArgs) => ({ files: a.files, session_id: a.session_id }), async ({ files, session_id }: FilesArgs) => {
       const id = session_id ?? `mcp-${process.pid}`;
       const now = Date.now();
       const results = [];
       for (const f of files) results.push(explainOutcome(await checkFile(manifestDir, normRel(f), id, now)));
       return jsonResult({ session_id: id, results, held: results.filter((r) => !r.ok) });
-    },
+    }),
   );
 
   server.registerTool(
@@ -287,13 +341,13 @@ export function buildMcpServer(manifestPath: string, opts: McpOptions): McpServe
         session_id: z.string().optional(),
       },
     },
-    async ({ files, session_id }) => {
+    audited('repolith_release', (a: ReleaseArgs) => ({ files: a.files, session_id: a.session_id }), async ({ files, session_id }: ReleaseArgs) => {
       const id = session_id ?? `mcp-${process.pid}`;
       const released = files?.length
         ? await releaseFiles(manifestDir, files.map(normRel), id)
         : await releaseSession(manifestDir, id);
       return jsonResult({ released });
-    },
+    }),
   );
 
   server.registerTool(
@@ -302,7 +356,7 @@ export function buildMcpServer(manifestPath: string, opts: McpOptions): McpServe
       title: 'List active file claims',
       description: 'Every active (non-stale) file claim and which session holds it.',
     },
-    async () => jsonResult(await listClaims(manifestDir, Date.now())),
+    audited('repolith_list_claims', () => ({}), async () => jsonResult(await listClaims(manifestDir, Date.now()))),
   );
 
   server.registerTool(
@@ -317,23 +371,40 @@ export function buildMcpServer(manifestPath: string, opts: McpOptions): McpServe
         timeout_sec: z.number().optional().describe('Max seconds to block (default 120)'),
       },
     },
-    async ({ file, session_id, timeout_sec }) => {
+    audited('repolith_wait_claim', (a: WaitArgs) => ({ file: a.file, session_id: a.session_id, timeout_sec: a.timeout_sec }), async ({ file, session_id, timeout_sec }: WaitArgs) => {
       const id = session_id ?? `mcp-${process.pid}`;
       const res = await waitForClaim(manifestDir, normRel(file), id, { timeoutMs: (timeout_sec ?? 120) * 1000 });
       return jsonResult({ session_id: id, ...res });
-    },
+    }),
   );
 
-  // WRITE (gated) — restore the whole system to the locked state
-  if (opts.allowWrite) {
+  // READ — the audit trail itself, always available so any agent (or human) can see
+  // who has done what, and whether the log's hash chain still verifies intact.
+  server.registerTool(
+    'repolith_audit',
+    {
+      title: 'Audit log',
+      description:
+        'The append-only, hash-chained log of every repolith MCP tool call against this workspace so far, plus whether the chain still verifies. Reflects state as of just before this call.',
+    },
+    audited('repolith_audit', () => ({}), async () => {
+      const log = await readAuditLog(auditPath);
+      const verify = await verifyAuditLog(auditPath);
+      return jsonResult({ verified: verify.ok, entries: verify.entries, brokenAtLine: verify.brokenAtLine, log });
+    }),
+  );
+
+  // WRITE (gated) — restore the whole system to the locked state. Only registered
+  // for an agent-id with an explicit `checkout = true` grant in repolith.grants.toml.
+  if (hasGrant(grants, opts.agentId, 'checkout')) {
     server.registerTool(
       'repolith_checkout',
       {
         title: 'Restore locked state',
         description:
-          'Restore every repo to the commit pinned in repolith.lock.json (deterministic system checkout). Mutates working trees.',
+          'Restore every repo to the commit pinned in repolith.lock.json (deterministic system checkout). Mutates working trees. Requires a checkout grant for this agent-id.',
       },
-      async () => jsonResult(await restoreToLock(manifestPath)),
+      audited('repolith_checkout', () => ({}), async () => jsonResult(await restoreToLock(manifestPath))),
     );
   }
 
@@ -341,6 +412,6 @@ export function buildMcpServer(manifestPath: string, opts: McpOptions): McpServe
 }
 
 export async function startMcpServer(manifestPath: string, opts: McpOptions): Promise<void> {
-  const server = buildMcpServer(manifestPath, opts);
+  const server = await buildMcpServer(manifestPath, opts);
   await server.connect(new StdioServerTransport());
 }
