@@ -45,4 +45,19 @@ describe('parseManifest', () => {
     const dup = `[workspace]\nname="ws"\n[[repos]]\nname="a"\nurl="u"\npath="p"\nref="r"\n[[repos]]\nname="a"\nurl="u2"\npath="p2"\nref="r"`;
     expect(() => parseManifest(dup)).toThrow('duplicate');
   });
+
+  it('parses an optional [coord] append_only list', () => {
+    const m = parseManifest(VALID + `\n[coord]\nappend_only = ["CHANGELOG.md"]\n`);
+    expect(m.coord).toEqual({ append_only: ['CHANGELOG.md'] });
+  });
+
+  it('coord is undefined when [coord] is absent', () => {
+    const m = parseManifest(VALID);
+    expect(m.coord).toBeUndefined();
+  });
+
+  it('throws when coord.append_only is not an array of strings', () => {
+    expect(() => parseManifest(VALID + `\n[coord]\nappend_only = "not-an-array"\n`))
+      .toThrow('coord.append_only');
+  });
 });

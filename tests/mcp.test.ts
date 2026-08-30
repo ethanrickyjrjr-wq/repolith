@@ -151,3 +151,99 @@ describe('repolith mcp server', () => {
     }
   });
 });
+
+describe('repolith plan-coordination tools', () => {
+  it('exposes the coordination tools to any agent-id (no grant needed — they only touch .repolith/)', async () => {
+    const { client, close } = await connect({ agentId: 'alice' });
+    try {
+      const names = (await client.listTools()).tools.map((t) => t.name);
+      expect(names).toContain('repolith_register_plan');
+      expect(names).toContain('repolith_compare_plans');
+      expect(names).toContain('repolith_list_active');
+    } finally {
+      await close();
+    }
+  });
+
+  it('register_plan reports a hard conflict with another active session', async () => {
+    const { client, close } = await connect({ agentId: 'alice' });
+    try {
+      await client.callTool({
+        name: 'repolith_register_plan',
+        arguments: { session_id: 'A', summary: 'owns assistant', areas: ['src/assistant/**'] },
+      });
+      const res = await client.callTool({
+        name: 'repolith_register_plan',
+        arguments: { session_id: 'B', summary: 'refactor dock', areas: ['src/assistant/dock.tsx'] },
+      });
+      const data = JSON.parse(textOf(res as never));
+      expect(data.session_id).toBe('B');
+      expect(data.clear).toBe(false);
+      expect(data.conflicts[0].with_session).toBe('A');
+      expect(data.conflicts[0].severity).toBe('hard');
+
+      const listRes = await client.callTool({ name: 'repolith_list_active', arguments: {} });
+      const active = JSON.parse(textOf(listRes as never)) as Array<{ session_id: string }>;
+      const ids = active.map((p) => p.session_id);
+      expect(ids).toContain('A');
+      expect(ids).toContain('B');
+    } finally {
+      await close();
+    }
+  });
+
+  it('compare_plans finds overlap against the active sessions (read-only)', async () => {
+    const { client, close } = await connect({ agentId: 'alice' });
+    try {
+      // A and B from the previous test persist in the shared workspace store
+      const res = await client.callTool({
+        name: 'repolith_compare_plans',
+        arguments: { session_id: 'probe', areas: ['src/assistant/panel.tsx'] },
+      });
+      const data = JSON.parse(textOf(res as never));
+      expect(data.clear).toBe(false);
+    } finally {
+      await close();
+    }
+  });
+});
+
+describe('repolith edit-gate (claim) tools', () => {
+  it('claim → check (held) → release → reclaim', async () => {
+    const { client, close } = await connect({ agentId: 'alice' });
+    try {
+      const claimRes = await client.callTool({
+        name: 'repolith_claim',
+        arguments: { session_id: 'X', files: ['src/auth/session.ts'] },
+      });
+      expect(JSON.parse(textOf(claimRes as never)).results[0].status).toBe('new');
+
+      const checkRes = await client.callTool({
+        name: 'repolith_check',
+        arguments: { session_id: 'Y', files: ['src/auth/session.ts'] },
+      });
+      const checkData = JSON.parse(textOf(checkRes as never));
+      expect(checkData.held).toHaveLength(1);
+      expect(checkData.held[0].held_by).toBe('X');
+
+      const listRes = await client.callTool({ name: 'repolith_list_claims', arguments: {} });
+      const claims = JSON.parse(textOf(listRes as never)) as Array<{ file: string }>;
+      expect(claims.some((c) => c.file === 'src/auth/session.ts')).toBe(true);
+
+      const relRes = await client.callTool({
+        name: 'repolith_release',
+        arguments: { session_id: 'X', files: ['src/auth/session.ts'] },
+      });
+      expect(JSON.parse(textOf(relRes as never)).released).toBe(1);
+
+      // released → Y can now claim it
+      const yClaim = await client.callTool({
+        name: 'repolith_claim',
+        arguments: { session_id: 'Y', files: ['src/auth/session.ts'] },
+      });
+      expect(JSON.parse(textOf(yClaim as never)).results[0].status).toBe('new');
+    } finally {
+      await close();
+    }
+  });
+});
